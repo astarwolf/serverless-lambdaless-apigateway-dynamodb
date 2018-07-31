@@ -1,0 +1,179 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless Data API configured using Swagger specified inline
+
+Parameters:
+  Table: {Default: user-comments-api-sam, Type: String}
+  AccountId: {Default: 000000000000, Type: String}
+  RoleName: {Default: api-gateway-dynamo-full-user-comments, Type: String}
+
+Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      TableName: !Ref Table
+      SSESpecification: 
+        SSEEnabled: True
+      AttributeDefinitions: 
+        - AttributeName: PageId
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: PageId
+          KeyType: HASH
+      ProvisionedThroughput: 
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+  MyApi:
+    Type: AWS::Serverless::Api
+    Properties:
+        StageName: Prod
+        DefinitionBody:
+            swagger: 2.0
+            info:
+              title:
+                Ref: AWS::StackName
+            paths:
+              "/visits/{PageId}":
+                get:
+                  consumes:
+                    - "application/json"
+                  produces:
+                    - "application/json"
+                  responses:
+                    "200":
+                      description: "200 response"
+                      schema:
+                        $ref: "#/definitions/Empty"
+                  x-amazon-apigateway-integration:
+                    httpMethod: POST
+                    type: AWS
+                    uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/Query" }
+                    credentials: { "Fn::Sub": "arn:aws:iam::${AccountId}:role/${RoleName}" }
+                    requestTemplates:
+                      application/json: { 'Fn::Sub': "{ \n\
+                      \t\"TableName\": \"${Table}\",\n\
+                      \t\"KeyConditionExpression\": \"PageId = :v1\",\n\
+                      \t\"ExpressionAttributeValues\": {\n\
+                      \t\t\":v1\": { \n\
+                      \t\t\t\"S\": \"$input.params('PageId')\"\n\
+                      \t\t}\n\
+                      \t}\n}"}
+                    responses:
+                      default:
+                        statusCode: "200"   
+                        responseTemplates:
+                          application/json: "#set($inputRoot = $input.path('$'))\n\
+                          {\n\
+                          \t\"comments\": [\n\
+                          \t\t#foreach($elem in $inputRoot.Items) {\n\
+                          \t\t\t\"PageId\": \"$elem.PageId.S\",\n\
+                          \t\t\t\"Message\": \"$elem.Message.S\",\n\
+                          \t\t\t\"EventCount\": \"$elem.EventCount.N\"\n\
+                          \t\t}#if($foreach.hasNext),#end\n\
+                          \t#end\n\
+                          \t]\n}"
+
+                delete:
+                  consumes:
+                  - "application/json"
+                  produces:
+                  - "application/json"
+                  parameters:
+                  - name: "PageId"
+                    in: "path"
+                    required: true
+                    type: "string"
+                  responses:
+                    "200":
+                      description: "200 response"
+                      schema:
+                        $ref: "#/definitions/Empty"
+                  x-amazon-apigateway-integration:
+                    credentials: { "Fn::Sub": "arn:aws:iam::${AccountId}:role/${RoleName}" }
+                    uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem" }
+                    requestTemplates:
+                      application/json:  { 'Fn::Sub': "{ \n\
+                      \t\"TableName\": \"${Table}\",\n\
+                      \t\"Key\": {\n\
+                      \t\t\"PageId\": {\n
+                      \t\t\t\"S\": \"$input.params('PageId')\"\n\
+                      \t\t}\n\
+                      \t},\n\
+                      \t\"ConditionExpression\": \"attribute_not_exists(Replies)\",\n\
+                      \t\"ReturnValues\": \"ALL_OLD\"\n}" }
+                    responses:
+                      default:
+                        statusCode: "200"
+                    passthroughBehavior: "when_no_match"
+                    httpMethod: "POST"
+                    type: "aws"
+
+              "/visits":
+                put:
+                  consumes:
+                    - "application/json"
+                  produces:
+                    - "application/json"
+                  responses:
+                    "200":
+                      description: "200 response"
+                      schema:
+                        $ref: "#/definitions/Empty"
+                  x-amazon-apigateway-integration:
+                    httpMethod: POST
+                    type: AWS
+                    uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/PutItem" }
+                    credentials: { "Fn::Sub": "arn:aws:iam::${AccountId}:role/${RoleName}" }
+                    requestTemplates:
+                      application/json: { 'Fn::Sub': "{ \n\
+                      \t\"TableName\": \"${Table}\",\n\
+                      \t\"Item\": {\n\
+                      \t\t\"PageId\": {\n\
+                      \t\t\t\"S\": \"$input.path('$.PageId')\"\n\
+                      \t\t},\n\
+                      \t\t\"EventCount\": {\n\
+                      \t\t\t\"N\": \"$input.path('$.EventCount')\"\n\
+                      \t\t},\n\
+                      \t\t\"Message\": {\n\
+                      \t\t\t\"S\": \"$input.path('$.Message')\"\n\
+                      \t\t}\n
+                      \t}\n}" }
+                    responses:
+                      default:
+                        statusCode: "200"
+                post:
+                  consumes:
+                    - "application/json"
+                  produces:
+                    - "application/json"
+                  responses:
+                    "200":
+                      description: "200 response"
+                      schema:
+                        $ref: "#/definitions/Empty"
+                  x-amazon-apigateway-integration:
+                    httpMethod: POST
+                    type: AWS
+                    uri: { "Fn::Sub": "arn:aws:apigateway:${AWS::Region}:dynamodb:action/UpdateItem" }
+                    credentials: { "Fn::Sub": "arn:aws:iam::${AccountId}:role/${RoleName}" }
+                    requestTemplates:
+                      application/json: { 'Fn::Sub': "{\n\t\"TableName\": \"${Table}\",\n\
+                      \t\"Key\":{\n
+                      \t\t\"PageId\": {\n
+                      \t\t\t\"S\": \"$input.path('$.PageId')\"\n\
+                      \t\t}\n\
+                      \t},\n\
+                      \t\"ExpressionAttributeValues\": {\n\
+                      \t\t\":event_count\": {\n\
+                      \t\t\t\"N\": \"$input.path('$.EventCount')\"},\n\
+                      \t\t\":message\": {\n\
+                      \t\t\t\"S\": \"$input.path('$.Message')\"}\n\
+                      \t},\n\
+                      \t\"UpdateExpression\": \"ADD EventCount :event_count SET Message = :message\",\n\ \t\"ReturnValues\": \"ALL_NEW\"\n}"}
+                    responses:
+                      default:
+                        statusCode: "200"
+            definitions:
+              Empty:
+                type: "object"
+                title: "Empty Schema"
