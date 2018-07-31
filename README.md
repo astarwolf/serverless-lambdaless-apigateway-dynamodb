@@ -1,0 +1,1 @@
+# serverless-lambdaless-apigateway-dynamodb
