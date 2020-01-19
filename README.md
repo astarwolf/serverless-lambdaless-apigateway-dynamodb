@@ -19,9 +19,13 @@ I'm only describing a subset that you need to get this code and config deployed 
 
 ### Setup
 
-You need to setup AWS CLI and add you profile in `common-variables.sh` and will also need to change the AWS accountId (current set to 000000000000). The AWS accountId is also used in some IAM policies in the IAM folder. In addition the region will have to be changed. To replace your accountId (assume your AWS accountId is 111111111111) you can do it manually or run:
+You need to setup AWS CLI and add you profile in `common-variables.sh` and will also need to change the AWS accountId (currently set to 000000000000). The AWS accountId is also used in some IAM policies in the IAM folder. In addition the region will have to be changed. To replace your accountId (assume your AWS accountId is 111111111111) you can do it manually or run:
 ```
 find ./ -type f -exec sed -i '' -e 's/000000000000/111111111111/' {} \;
+```
+You will also need to change the AWS region (currently set to eu-west-1). The AWS region is hardcoded to eu-west-1 in some IAM policies in the IAM folder.  To replace it with your region (assume your AWS region is us-east-1) you can do it manually or run:
+```
+find ./ -type f -exec sed -i '' -e 's/eu-west-1/us-east-1/' {} \;
 ```
 I've done this so you can more easily support multiple AWS Account in a CI pipeline.
 
